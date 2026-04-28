@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AJI Meeting Transcriber</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="heading">
+        <div>
+          <h1>AJI Meeting Transcriber</h1>
+          <p>拖入會議錄音，轉成多講者逐字稿。</p>
+        </div>
+        <span class="badge" id="statusBadge">待命</span>
+      </div>
+
+      <form id="uploadForm">
+        <label class="dropzone" id="dropzone">
+          <input id="audioInput" name="audio" type="file" accept=".m4a,.mp3,.wav,.webm,.mp4,.aac,.flac,.ogg,audio/*">
+          <span class="dropIcon">+</span>
+          <strong id="fileName">拖曳音檔到這裡，或點一下選擇檔案</strong>
+          <small>支援 m4a、mp3、wav、webm、mp4、aac、flac、ogg</small>
+        </label>
+
+        <div class="actions">
+          <button id="submitButton" type="submit">轉譯</button>
+          <a class="download disabled" id="txtDownload" href="/download/transcript">下載 TXT</a>
+          <a class="download disabled" id="jsonDownload" href="/download/json">下載 JSON</a>
+        </div>
+      </form>
+
+      <div class="status">
+        <div class="statusLine">
+          <span id="statusText">等待上傳音檔</span>
+          <span id="spinner" class="spinner hidden"></span>
+        </div>
+        <pre id="logBox"></pre>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.querySelector("#uploadForm");
+    const input = document.querySelector("#audioInput");
+    const dropzone = document.querySelector("#dropzone");
+    const fileName = document.querySelector("#fileName");
+    const button = document.querySelector("#submitButton");
+    const statusText = document.querySelector("#statusText");
+    const statusBadge = document.querySelector("#statusBadge");
+    const logBox = document.querySelector("#logBox");
+    const spinner = document.querySelector("#spinner");
+    const txtDownload = document.querySelector("#txtDownload");
+    const jsonDownload = document.querySelector("#jsonDownload");
+
+    function setDownloads(enabled) {
+      for (const link of [txtDownload, jsonDownload]) {
+        link.classList.toggle("disabled", !enabled);
+      }
+    }
+
+    input.addEventListener("change", () => {
+      fileName.textContent = input.files[0]?.name || "拖曳音檔到這裡，或點一下選擇檔案";
+    });
+
+    for (const eventName of ["dragenter", "dragover"]) {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.add("dragging");
+      });
+    }
+
+    for (const eventName of ["dragleave", "drop"]) {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("dragging");
+      });
+    }
+
+    dropzone.addEventListener("drop", (event) => {
+      const file = event.dataTransfer.files[0];
+      if (!file) return;
+      const files = new DataTransfer();
+      files.items.add(file);
+      input.files = files.files;
+      fileName.textContent = file.name;
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!input.files[0]) {
+        statusText.textContent = "請先選擇音檔";
+        return;
+      }
+
+      setDownloads(false);
+      button.disabled = true;
+      const data = new FormData();
+      data.append("audio", input.files[0]);
+
+      const response = await fetch("/api/transcribe", { method: "POST", body: data });
+      const body = await response.json();
+      if (!response.ok) {
+        statusText.textContent = body.error || "上傳失敗";
+        button.disabled = false;
+        return;
+      }
+      await pollStatus();
+    });
+
+    async function pollStatus() {
+      const response = await fetch("/api/status");
+      const state = await response.json();
+      statusText.textContent = state.message || "";
+      logBox.textContent = (state.logs || []).join("\n");
+      logBox.scrollTop = logBox.scrollHeight;
+
+      const running = state.status === "running";
+      button.disabled = running;
+      spinner.classList.toggle("hidden", !running);
+      statusBadge.textContent = {
+        idle: "待命",
+        running: "轉譯中",
+        done: "完成",
+        error: "錯誤"
+      }[state.status] || state.status;
+      statusBadge.dataset.state = state.status;
+      setDownloads(state.status === "done");
+
+      if (running) {
+        setTimeout(pollStatus, 1500);
+      }
+    }
+
+    setDownloads(false);
+    pollStatus();
+  </script>
+</body>
+</html>
