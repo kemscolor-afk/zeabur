@@ -1,0 +1,303 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", "Microsoft JhengHei", Arial, sans-serif;
+  background: #eef3f8;
+  color: #1d2733;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(135deg, rgba(30, 87, 153, 0.12), rgba(30, 137, 115, 0.08)),
+    #eef3f8;
+}
+
+.shell {
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 48px 0;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #d8e1ea;
+  border-radius: 8px;
+  box-shadow: 0 16px 36px rgba(29, 39, 51, 0.08);
+  padding: 28px;
+}
+
+.heading {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  margin: 0 0 8px;
+  letter-spacing: 0;
+}
+
+p {
+  margin: 0;
+  color: #5c6b7a;
+}
+
+.badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #e6edf5;
+  color: #2c465f;
+  padding: 7px 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.badge[data-state="running"] {
+  background: #fff0cf;
+  color: #76520b;
+}
+
+.badge[data-state="uploading"] {
+  background: #dfefff;
+  color: #1f5d91;
+}
+
+.badge[data-state="done"] {
+  background: #dff6eb;
+  color: #12643a;
+}
+
+.badge[data-state="error"] {
+  background: #ffe2e2;
+  color: #9f2424;
+}
+
+.dropzone {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 240px;
+  border: 2px dashed #9bb0c3;
+  border-radius: 8px;
+  background: #f7fafc;
+  text-align: center;
+  cursor: pointer;
+  padding: 28px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.dropzone.dragging {
+  border-color: #227f6c;
+  background: #eefaf6;
+}
+
+.dropzone input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dropIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: #227f6c;
+  color: #ffffff;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.dropzone strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+
+.dropzone small {
+  color: #718094;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.field span {
+  font-weight: 700;
+  color: #33465a;
+}
+
+.field input {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid #b7c8d8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.field small {
+  color: #718094;
+}
+
+.progressGroup {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #33465a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.progressBar {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #dbe5ee;
+}
+
+.progressBar span {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: #227f6c;
+  transition: width 0.2s ease;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+button,
+.download {
+  min-height: 42px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button {
+  background: #1f6fb2;
+  color: #ffffff;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.download {
+  background: #ffffff;
+  color: #1f6fb2;
+  border-color: #b7c8d8;
+}
+
+.download.disabled {
+  pointer-events: none;
+  color: #8a96a3;
+  border-color: #d7e0e8;
+  background: #f4f7fa;
+}
+
+.status {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 18px;
+}
+
+.statusLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  color: #33465a;
+  font-weight: 700;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #c8d5e2;
+  border-top-color: #1f6fb2;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.hidden {
+  display: none;
+}
+
+pre {
+  min-height: 180px;
+  max-height: 340px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: #111820;
+  color: #d8e5ef;
+  padding: 16px;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    width: min(100% - 20px, 960px);
+    padding: 20px 0;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+
+  .heading {
+    flex-direction: column;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .actions {
+    display: grid;
+  }
+
+  button,
+  .download {
+    width: 100%;
+    text-align: center;
+  }
+}

@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AJI Meeting Transcriber</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="heading">
+        <div>
+          <h1>AJI Meeting Transcriber</h1>
+          <p>拖入會議錄音，轉成多講者逐字稿。上傳和處理狀態會即時顯示。</p>
+        </div>
+        <span class="badge" id="statusBadge">待命</span>
+      </div>
+
+      <form id="uploadForm">
+        <label class="dropzone" id="dropzone">
+          <input id="audioInput" name="audio" type="file" accept=".m4a,.mp3,.wav,.webm,.mp4,.aac,.flac,.ogg,audio/*">
+          <span class="dropIcon">+</span>
+          <strong id="fileName">拖曳音檔到這裡，或點一下選擇檔案</strong>
+          <small>支援 m4a、mp3、wav、webm、mp4、aac、flac、ogg</small>
+        </label>
+
+        <label class="field">
+          <span>完成後寄送到 Email</span>
+          <input id="emailInput" name="email" type="email" placeholder="you@example.com">
+          <small>
+            {% if email_enabled %}
+              SMTP 已設定，可以在完成後寄出附件。
+            {% else %}
+              尚未設定 SMTP；留空也可以，完成後回到這頁下載。
+            {% endif %}
+          </small>
+        </label>
+
+        <div class="progressGroup">
+          <div class="progressLabel">
+            <span id="progressTitle">上傳進度</span>
+            <span id="progressPercent">0%</span>
+          </div>
+          <div class="progressBar">
+            <span id="progressFill"></span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="submitButton" type="submit">轉譯</button>
+          <a class="download disabled" id="txtDownload" href="/download/transcript">下載 TXT</a>
+          <a class="download disabled" id="jsonDownload" href="/download/json">下載 JSON</a>
+        </div>
+      </form>
+
+      <div class="status">
+        <div class="statusLine">
+          <span id="statusText">等待上傳音檔</span>
+          <span id="spinner" class="spinner hidden"></span>
+        </div>
+        <pre id="logBox"></pre>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.querySelector("#uploadForm");
+    const input = document.querySelector("#audioInput");
+    const emailInput = document.querySelector("#emailInput");
+    const dropzone = document.querySelector("#dropzone");
+    const fileName = document.querySelector("#fileName");
+    const button = document.querySelector("#submitButton");
+    const statusText = document.querySelector("#statusText");
+    const statusBadge = document.querySelector("#statusBadge");
+    const logBox = document.querySelector("#logBox");
+    const spinner = document.querySelector("#spinner");
+    const txtDownload = document.querySelector("#txtDownload");
+    const jsonDownload = document.querySelector("#jsonDownload");
+    const progressTitle = document.querySelector("#progressTitle");
+    const progressPercent = document.querySelector("#progressPercent");
+    const progressFill = document.querySelector("#progressFill");
+    const defaultDropText = "拖曳音檔到這裡，或點一下選擇檔案";
+
+    function setDownloads(enabled) {
+      for (const link of [txtDownload, jsonDownload]) {
+        link.classList.toggle("disabled", !enabled);
+      }
+    }
+
+    function setProgress(title, percent) {
+      const value = Math.max(0, Math.min(100, Math.round(percent)));
+      progressTitle.textContent = title;
+      progressPercent.textContent = `${value}%`;
+      progressFill.style.width = `${value}%`;
+    }
+
+    input.addEventListener("change", () => {
+      fileName.textContent = input.files[0]?.name || defaultDropText;
+    });
+
+    for (const eventName of ["dragenter", "dragover"]) {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.add("dragging");
+      });
+    }
+
+    for (const eventName of ["dragleave", "drop"]) {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("dragging");
+      });
+    }
+
+    dropzone.addEventListener("drop", (event) => {
+      const file = event.dataTransfer.files[0];
+      if (!file) return;
+      const files = new DataTransfer();
+      files.items.add(file);
+      input.files = files.files;
+      fileName.textContent = file.name;
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!input.files[0]) {
+        statusText.textContent = "請先選擇音檔。";
+        return;
+      }
+
+      setDownloads(false);
+      button.disabled = true;
+      spinner.classList.remove("hidden");
+      statusText.textContent = "正在上傳音檔...";
+      statusBadge.textContent = "上傳中";
+      statusBadge.dataset.state = "uploading";
+      setProgress("上傳進度", 0);
+
+      const data = new FormData();
+      data.append("audio", input.files[0]);
+      data.append("email", emailInput.value.trim());
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/transcribe");
+
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          setProgress("上傳進度", (event.loaded / event.total) * 100);
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        let body = {};
+        try {
+          body = JSON.parse(xhr.responseText || "{}");
+        } catch {
+          body = {};
+        }
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          statusText.textContent = body.error || "上傳失敗。";
+          statusBadge.textContent = "錯誤";
+          statusBadge.dataset.state = "error";
+          spinner.classList.add("hidden");
+          button.disabled = false;
+          return;
+        }
+
+        setProgress("上傳完成", 100);
+        pollStatus();
+      });
+
+      xhr.addEventListener("error", () => {
+        statusText.textContent = "上傳失敗，請檢查網路或重新嘗試。";
+        statusBadge.textContent = "錯誤";
+        statusBadge.dataset.state = "error";
+        spinner.classList.add("hidden");
+        button.disabled = false;
+      });
+
+      xhr.send(data);
+    });
+
+    async function pollStatus() {
+      const response = await fetch("/api/status", { cache: "no-store" });
+      const state = await response.json();
+      statusText.textContent = state.message || "";
+      logBox.textContent = (state.logs || []).join("\n");
+      logBox.scrollTop = logBox.scrollHeight;
+
+      const running = state.status === "running" || state.status === "uploading";
+      button.disabled = running;
+      spinner.classList.toggle("hidden", !running);
+      statusBadge.textContent = {
+        idle: "待命",
+        uploading: "上傳中",
+        running: "處理中",
+        done: "完成",
+        error: "錯誤"
+      }[state.status] || state.status;
+      statusBadge.dataset.state = state.status;
+      setDownloads(state.status === "done");
+
+      if (state.status === "running") {
+        setProgress("處理中", 100);
+      }
+
+      if (running) {
+        setTimeout(pollStatus, 1500);
+      }
+    }
+
+    setDownloads(false);
+    setProgress("上傳進度", 0);
+    pollStatus();
+  </script>
+</body>
+</html>
