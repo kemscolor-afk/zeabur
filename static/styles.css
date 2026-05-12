@@ -207,6 +207,12 @@ button {
   color: #ffffff;
 }
 
+button.secondary {
+  background: #ffffff;
+  color: #33465a;
+  border-color: #b7c8d8;
+}
+
 button:disabled {
   cursor: wait;
   opacity: 0.65;

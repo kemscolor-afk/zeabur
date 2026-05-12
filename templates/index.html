@@ -49,6 +49,7 @@
 
         <div class="actions">
           <button id="submitButton" type="submit">轉譯</button>
+          <button id="resetButton" type="button" class="secondary">重置狀態</button>
           <a class="download disabled" id="txtDownload" href="/download/transcript">下載 TXT</a>
           <a class="download disabled" id="jsonDownload" href="/download/json">下載 JSON</a>
         </div>
@@ -71,6 +72,7 @@
     const dropzone = document.querySelector("#dropzone");
     const fileName = document.querySelector("#fileName");
     const button = document.querySelector("#submitButton");
+    const resetButton = document.querySelector("#resetButton");
     const statusText = document.querySelector("#statusText");
     const statusBadge = document.querySelector("#statusBadge");
     const logBox = document.querySelector("#logBox");
@@ -159,7 +161,8 @@
         }
 
         if (xhr.status < 200 || xhr.status >= 300) {
-          statusText.textContent = body.error || "上傳失敗。";
+          const detail = body.error || xhr.responseText || "上傳失敗。";
+          statusText.textContent = `上傳失敗 HTTP ${xhr.status}：${detail}`;
           statusBadge.textContent = "錯誤";
           statusBadge.dataset.state = "error";
           spinner.classList.add("hidden");
@@ -180,6 +183,24 @@
       });
 
       xhr.send(data);
+    });
+
+    resetButton.addEventListener("click", async () => {
+      resetButton.disabled = true;
+      const response = await fetch("/api/reset", { method: "POST" });
+      if (response.ok) {
+        statusText.textContent = "狀態已重置，可以重新上傳。";
+        statusBadge.textContent = "待命";
+        statusBadge.dataset.state = "idle";
+        spinner.classList.add("hidden");
+        button.disabled = false;
+        setProgress("上傳進度", 0);
+        setDownloads(false);
+      } else {
+        statusText.textContent = `重置失敗 HTTP ${response.status}`;
+      }
+      resetButton.disabled = false;
+      pollStatus();
     });
 
     async function pollStatus() {

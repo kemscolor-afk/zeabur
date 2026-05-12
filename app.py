@@ -4,11 +4,13 @@ import os
 import smtplib
 import threading
 import time
+import traceback
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request, send_file
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
 from transcribe_meeting import INPUT_DIR, OUTPUT_DIR, UserFacingError, transcribe_file
@@ -22,6 +24,10 @@ ALLOWED_SUFFIXES = {".m4a", ".mp3", ".wav", ".webm", ".mp4", ".aac", ".flac", ".
 
 INPUT_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+
+def log(message: str) -> None:
+    print(f"[aji] {message}", flush=True)
 
 job: dict[str, Any] = {
     "status": "idle",
@@ -43,6 +49,7 @@ def update_job(**updates: Any) -> None:
 
 
 def add_log(message: str) -> None:
+    log(message)
     with job_lock:
         job["message"] = message
         job["logs"].append(message)
@@ -108,10 +115,12 @@ def send_result_email(recipient: str, paths: dict[str, Path]) -> None:
 
 
 def run_transcription(audio_path: Path, email: str | None) -> None:
+    log(f"job started: audio={audio_path.name}, email={'yes' if email else 'no'}")
     update_job(status="running", phase="processing", started_at=time.time(), finished_at=None, error=None)
     try:
         paths = transcribe_file(audio_path=audio_path, progress=add_log)
         update_job(status="done", phase="done", message="轉譯完成", finished_at=time.time())
+        log("job done")
 
         if email:
             update_job(email_status="sending")
@@ -125,8 +134,11 @@ def run_transcription(audio_path: Path, email: str | None) -> None:
                 add_log(f"Email 寄送失敗：{exc}")
     except UserFacingError as exc:
         update_job(status="error", phase="error", message=str(exc), error=str(exc), finished_at=time.time())
+        log(f"job failed: {exc}")
     except Exception as exc:
         update_job(status="error", phase="error", message=f"Unexpected error: {exc}", error=str(exc), finished_at=time.time())
+        log("unexpected job error")
+        traceback.print_exc()
 
 
 @app.get("/")
@@ -139,15 +151,40 @@ def healthz():
     return jsonify({"ok": True})
 
 
+@app.errorhandler(RequestEntityTooLarge)
+def handle_large_upload(exc: RequestEntityTooLarge):
+    limit_mb = app.config["MAX_CONTENT_LENGTH"] / 1024 / 1024
+    log(f"upload rejected: request too large, limit={limit_mb:.0f}MB")
+    return jsonify({"error": f"檔案太大，超過目前上傳限制 {limit_mb:.0f} MB。"}), 413
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(exc: Exception):
+    log(f"request failed: {exc}")
+    traceback.print_exc()
+    return jsonify({"error": f"伺服器錯誤：{exc}"}), 500
+
+
 @app.get("/api/status")
 def status():
     return jsonify(snapshot_job())
 
 
+@app.post("/api/reset")
+def reset():
+    current = snapshot_job()
+    if current["status"] in {"running", "uploading"}:
+        add_log("使用者手動重置狀態。若背景工作仍在執行，請重新部署或重啟服務。")
+    reset_job()
+    return jsonify({"ok": True})
+
+
 @app.post("/api/transcribe")
 def transcribe():
+    log(f"upload request: content_length={request.content_length}")
     current = snapshot_job()
-    if current["status"] == "running":
+    if current["status"] in {"running", "uploading"}:
+        log("upload rejected: job already running")
         return jsonify({"error": "已有轉譯工作正在執行，請稍候。"}), 409
 
     uploaded = request.files.get("audio")
@@ -156,6 +193,7 @@ def transcribe():
 
     suffix = Path(uploaded.filename).suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
+        log(f"upload rejected: unsupported suffix={suffix}")
         return jsonify({"error": f"不支援的檔案格式：{suffix or '(無副檔名)'}"}), 400
 
     email = (request.form.get("email") or "").strip() or None
@@ -165,8 +203,15 @@ def transcribe():
 
     reset_job(email=email)
     update_job(status="uploading", phase="uploading", message="正在接收上傳音檔")
-    uploaded.save(audio_path)
+    try:
+        uploaded.save(audio_path)
+    except Exception as exc:
+        update_job(status="error", phase="error", message=f"上傳保存失敗：{exc}", error=str(exc), finished_at=time.time())
+        log(f"upload save failed: {exc}")
+        raise
+
     add_log(f"已收到音檔：{uploaded.filename}")
+    log(f"upload saved: path={audio_path}, size={audio_path.stat().st_size}")
 
     thread = threading.Thread(target=run_transcription, args=(audio_path, email), daemon=True)
     thread.start()
@@ -192,4 +237,5 @@ def download_json():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
+    log(f"starting flask dev server on 0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)
