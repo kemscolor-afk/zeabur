@@ -108,10 +108,16 @@ python .\transcribe_meeting.py --split-only
 ## 輸出檔案
 
 ```text
-output\raw_chunk_000.json
-output\raw_chunk_001.json
 output\transcript.txt
 output\transcript_merged_raw.json
 ```
+
+轉譯完成後，程式會自動清除暫存檔：
+
+- `output\chunks\chunk_*.webm`
+- `output\raw_chunk_*.json`
+- Web 上傳產生的 `input\uploaded_audio.*`
+
+本機手動放入的 `input\meeting.m4a` 不會被自動刪除。
 
 Zeabur container 的檔案系統是暫存的，建議用 Email 取回結果，或完成後立刻在頁面下載。

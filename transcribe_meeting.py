@@ -85,6 +85,29 @@ def clean_previous_outputs() -> None:
         path.unlink()
 
 
+def clean_temporary_files(audio_path: Path, progress: ProgressCallback = print) -> None:
+    deleted = 0
+    audio_path = Path(audio_path).resolve()
+    input_dir = INPUT_DIR.resolve()
+
+    for path in CHUNKS_DIR.glob("chunk_*.webm"):
+        path.unlink(missing_ok=True)
+        deleted += 1
+
+    for path in OUTPUT_DIR.glob("raw_chunk_*.json"):
+        path.unlink(missing_ok=True)
+        deleted += 1
+
+    # Web uploads are copied to input/uploaded_audio.*. Do not delete a user's
+    # manually managed input/meeting.m4a or an arbitrary CLI --input file.
+    if audio_path.parent == input_dir and audio_path.stem == "uploaded_audio":
+        audio_path.unlink(missing_ok=True)
+        deleted += 1
+
+    if deleted:
+        progress(f"Cleaned temporary files: {deleted}")
+
+
 def run_ffmpeg(ffmpeg: str, audio_path: Path, progress: ProgressCallback = print) -> list[Path]:
     progress("Compressing and splitting audio into webm/opus chunks...")
 
@@ -295,6 +318,7 @@ def transcribe_file(
     progress("Merging transcript segments...")
     merged = merge_chunks(raw_chunks)
     paths = write_outputs(merged)
+    clean_temporary_files(audio_path, progress)
     progress("Done.")
     return paths
 
